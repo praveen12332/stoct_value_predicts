@@ -1,0 +1,52 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+
+data = pd.read_csv('/content/TATAMOTORS_BSE_01Oct20-01Oct21.csv')
+
+data = data.sort_values('Date')
+
+close_price = data['Close'].values.reshape(-1, 1)
+
+scaler = MinMaxScaler(feature_range=(0, 1))
+scaled_close_price = scaler.fit_transform(close_price)
+
+# Split the data into training and testing set
+train_size = int(len(scaled_close_price) * 0.8)
+test_size = len(scaled_close_price) - train_size
+train_data, test_data = scaled_close_price[0:train_size, :], scaled_close_price[train_size:len(scaled_close_price), :]
+
+def create_sequences(data, sequence_length):
+    X = []
+    y = []
+    for i in range(len(data) - sequence_length - 1):
+        X.append(data[i:(i + sequence_length), 0])
+        y.append(data[i + sequence_length, 0])
+    return np.array(X), np.array(y)
+
+sequence_length = 30
+X_train, y_train = create_sequences(train_data, sequence_length)
+X_test, y_test = create_sequences(test_data, sequence_length)
+
+X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
+X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
+
+model = Sequential()
+model.add(LSTM(units=50, return_sequences=True, input_shape=(sequence_length, 1)))
+model.add(LSTM(units=50))
+model.add(Dense(units=1))
+
+model.compile(optimizer='adam', loss='mean_squared_error')
+model.fit(X_train, y_train, epochs=6, batch_size=32)
+
+predictions = model.predict(X_test)
+predictions = scaler.inverse_transform(predictions)
+
+plt.plot(close_price[train_size + sequence_length + 1:], label='Actual Price')
+plt.plot(predictions, label='Predict Price')
+plt.legend()
+plt.show()
+print(data)
